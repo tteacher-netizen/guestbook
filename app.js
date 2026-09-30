@@ -6,7 +6,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { 
   getAuth, 
-  signInWithPopup, 
+  signInWithRedirect, 
+  getRedirectResult, 
   GoogleAuthProvider, 
   signOut, 
   onAuthStateChanged 
@@ -87,7 +88,7 @@ messageInput.addEventListener("input", () => {
 });
 
 // ========================================================
-// 5. 로그인 / 로그아웃 처리
+// 5. 로그인 / 로그아웃 처리 (현재 창 이동 방식)
 // ========================================================
 loginBtn.addEventListener("click", async () => {
   if (!isFirebaseConfigured) {
@@ -96,22 +97,11 @@ loginBtn.addEventListener("click", async () => {
   }
 
   try {
-    const result = await signInWithPopup(auth, provider);
-    const user = result.user;
-
-    // ★ @hmh.or.kr 도메인 엄격 검증
-    if (!user.email || !user.email.endsWith(`@${ALLOWED_DOMAIN}`)) {
-      alert(`⚠️ 접근 제한 안내\n\n효명고 교직원 계정(@${ALLOWED_DOMAIN})으로만 로그인하실 수 있습니다.\n(현재 로그인 시도: ${user.email})`);
-      await signOut(auth);
-      return;
-    }
-
-    console.log("로그인 성공:", user.displayName);
+    // 팝업 대신 현재 창에서 구글 로그인 화면으로 이동
+    await signInWithRedirect(auth, provider);
   } catch (error) {
     console.error("로그인 에러:", error);
-    if (error.code !== "auth/popup-closed-by-user") {
-      alert("로그인 중 오류가 발생했습니다: " + error.message);
-    }
+    alert("로그인 중 오류가 발생했습니다: " + error.message);
   }
 });
 
@@ -146,8 +136,23 @@ function updateAuthUI(user) {
   }
 }
 
-// Firebase Auth 상태 감지
+// Firebase Auth 상태 감지 및 리다이렉트 로그인 결과 처리
 if (isFirebaseConfigured && auth) {
+  // 현재 창 로그인 후 복귀 시 결과 검증
+  getRedirectResult(auth)
+    .then((result) => {
+      if (result && result.user) {
+        const user = result.user;
+        if (!user.email || !user.email.endsWith(`@${ALLOWED_DOMAIN}`)) {
+          alert(`⚠️ 접근 제한 안내\n\n효명고 교직원 계정(@${ALLOWED_DOMAIN})으로만 로그인하실 수 있습니다.\n(현재 로그인 시도: ${user.email})`);
+          signOut(auth);
+        }
+      }
+    })
+    .catch((error) => {
+      console.error("리다이렉트 로그인 결과 처리 에러:", error);
+    });
+
   onAuthStateChanged(auth, (user) => {
     if (user) {
       if (user.email && user.email.endsWith(`@${ALLOWED_DOMAIN}`)) {
